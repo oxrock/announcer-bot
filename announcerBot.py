@@ -1,5 +1,7 @@
 from rlbot.utils.structures.game_interface import GameInterface
-from rlbot.utils.structures.game_data_struct import GameTickPacket
+from rlbot.utils.structures.game_data_struct import GameTickPacket,FieldInfoPacket
+from rlbot.messages.flat.BallPrediction import BallPrediction as BallPredictionPacket
+from rlbot.utils.structures.ball_prediction_struct import BallPrediction
 from rlbot.utils.logging_utils import get_logger
 from utils import *
 import pyttsx3
@@ -20,7 +22,7 @@ def host(_queue):
 
     print("Announcer initialized!")
     while True:
-        if not _queue.empty():
+        if not _queue.empty(): #should empty queue into local storage, update decay and prune comments no longer relavent
             comment = _queue.get()
             engine.setProperty("rate",rate+(_queue.qsize()*10))
             if comment == "exit":

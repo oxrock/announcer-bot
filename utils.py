@@ -205,7 +205,7 @@ def speedConversion(speed_in_UU):
     return 0
 
 class Car():
-    def __init__(self, name, team, index):
+    def __init__(self, name, team, index): #could probably just start updating this class with boost, location and velocity
         self.name = name
         self.team = team
         self.index = index
@@ -263,11 +263,11 @@ class ballTouch():
         return True
 
 class Comment():
-    def __init__(self, _comment, voiceID):
+    def __init__(self, _comment, voiceID): #need to add priority indicators along with a decay rate
         self.comment = _comment
         self.voiceID = voiceID
 
-def shotDetection(ballObj,timeLimit):
+def shotDetection(ballObj,timeLimit): #this will be reworked shortly after getting ballprediction going
     distanceLimit = 1800
     blueGoal = Vector([0, -5200, 0])
     orangeGoal = Vector([0, 5200, 0])
@@ -310,7 +310,7 @@ def shotDetection(ballObj,timeLimit):
 
 
 
-def ballHeading(ballObj):
+def ballHeading(ballObj): #0 heading towards blue, 1 heading towards orange, 2 nuetral hit
     blueGoal = Vector([0,-5200,0])
     orangeGoal = Vector([0, 5200, 0])
     futureLocation = ballObj.location + ballObj.velocity.scale(1 / 20)
