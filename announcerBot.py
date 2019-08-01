@@ -122,7 +122,7 @@ class Commentator():
 
 
     def updateTouches(self, packet):
-        contactNames = ["hit","touch","contact"]
+        contactNames = rstring("hit","touch","contact")
 
         try:
             touch = ballTouch(packet.game_ball.latest_touch)
@@ -144,38 +144,38 @@ class Commentator():
                                 if touch.team == 0:
                                     if self.ballHistory[-1].location[1] >= 0:
                                         self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} pushes the ball back towards blue")
+                                            f"{touch.player_name}'s {contactNames} pushes the ball back towards blue")
                                     else:
                                         self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} moves the ball towards its own goal.")
+                                            f"{touch.player_name}'s {contactNames} moves the ball towards its own goal.")
                                 else:
                                     if touch.team == 1:
                                         if self.ballHistory[-1].location[1] <= 0:
                                             self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} puts the ball into a dangerous position for blue.")
+                                                f"{touch.player_name}'s {contactNames} puts the ball into a dangerous position for blue.")
                                         else:
                                             self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} sends the ball towards blue side.")
+                                                f"{touch.player_name}'s {contactNames} sends the ball towards blue side.")
 
                             elif _ballHeading == 1:
                                 if touch.team == 0:
                                     if self.ballHistory[-1].location[1] >= 0:
                                         self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} puts the ball into a dangerous position for orange.")
+                                            f"{touch.player_name}'s {contactNames} puts the ball into a dangerous position for orange.")
                                     else:
                                         self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} sends the ball towards orange side.")
+                                            f"{touch.player_name}'s {contactNames} sends the ball towards orange side.")
                                 else:
                                     if touch.team == 1:
                                         if self.ballHistory[-1].location[1] >= 0:
                                             self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} moves the ball towards its own goal.")
+                                                f"{touch.player_name}'s {contactNames} moves the ball towards its own goal.")
                                         else:
                                             self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} pushes the ball back  towards orange")
+                                                f"{touch.player_name}'s {contactNames} pushes the ball back  towards orange")
 
                             else:
-                                self.speak(f"{touch.player_name}'s {contactNames[random.randint(0,2)]} is neutral.")
+                                self.speak(f"{touch.player_name}'s {contactNames} is neutral.")
 
                             self.touchTimer = self.currentTime
 
