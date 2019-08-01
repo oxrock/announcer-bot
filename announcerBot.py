@@ -1,11 +1,9 @@
 from rlbot.utils.structures.game_interface import GameInterface
 from rlbot.utils.structures.game_data_struct import GameTickPacket,FieldInfoPacket
-from rlbot.messages.flat.BallPrediction import BallPrediction as BallPredictionPacket
 from rlbot.utils.structures.ball_prediction_struct import BallPrediction
 from rlbot.utils.logging_utils import get_logger
 from utils import *
 import pyttsx3
-import psutil
 from queue import Queue
 import threading
 import random
@@ -53,7 +51,10 @@ class Commentator():
         self.lastTouches = []
         self.teams = []
         self.joinTimer = 0
-        self.q = Queue(maxsize=3)
+        self.packet = GameTickPacket()
+        self.f_packet = FieldInfoPacket()
+        self.ball_predictions = BallPrediction()
+        self.q = Queue(maxsize=5)
         self.host = threading.Thread(target=host, args=(self.q,))
         self.host.start()
         self.main()
@@ -233,34 +234,35 @@ class Commentator():
 
     def main(self):
         while True:
-            packet = GameTickPacket()
-            self.game_interface.update_live_data_packet(packet)
-            gametime = "{:.2f}".format(packet.game_info.seconds_elapsed)
+            self.game_interface.update_live_data_packet(self.packet)
+            self.game_interface.update_field_info_packet(self.f_packet)
+            self.game_interface.update_ball_prediction(self.ball_predictions)
+            gametime = "{:.2f}".format(self.packet.game_info.seconds_elapsed)
 
-            if packet.game_info.is_match_ended:
+            if self.packet.game_info.is_match_ended:
                 print("Game is over, exiting.")
                 self.gameWrapUp()
                 self.stopHost()
                 break
 
             if self.firstIter:
-                if packet.num_cars >= 1:
+                if self.packet.num_cars >= 1:
                     if self.joinTimer <= 0:
                         self.joinTimer = time.time()
                     if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
                         self.firstIter = False
                         self.currentTime = float(gametime)
-                        self.gatherMatchData(packet)
+                        self.gatherMatchData(self.packet)
 
             if self.timeCheck(float(gametime)):
                 print("framework reset, resetting announcerbot")
                 self.reset()
             if not self.firstIter:
-                self.updateGameBall(packet)
-                self.updateTouches(packet)
+                self.updateGameBall(self.packet)
+                self.updateTouches(self.packet)
                 self.handleShotDetection()
-                self.scoreCheck(packet)
-                self.overtimeCheck(packet)
+                self.scoreCheck(self.packet)
+                self.overtimeCheck(self.packet)
 
 
 if __name__ == "__main__":
