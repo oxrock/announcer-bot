@@ -4,20 +4,20 @@ import time
 
 # Create a list of strings that can be selected from randomly. This allows for greater variety in the strings created.
 class rstring():
-	def __init__(self, items):
-		if items:
-			self.items = items
-		else:
-			self.items = []
-	
-	def append(self, str):
-		self.items.append(str)
-	
-	def __repr__(self):
-		if len(self.items) == 0:
-			return ""
-		else:
-			return self.items[random.randint(0, len(self.items) - 1)]
+    def __init__(self, items):
+        if items:
+            self.items = items
+        else:
+            self.items = []
+        
+    def append(self, str):
+            self.items.append(str)
+    
+    def __repr__(self):
+        if len(self.items) == 0:
+            return ""
+        else:
+            return self.items[random.randint(0, len(self.items) - 1)]
 
 def clamp(_max,_min,value):
     if value > _max:
