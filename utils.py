@@ -180,9 +180,46 @@ def cornerDetection(_vec):
                 return 3
             else:
                 return 0
-
     else:
         return -1
+
+def boxDetection(_vec):
+    if abs(_vec[0]) <= 1000:
+        if 5120 - abs(_vec[1]) <= 1000:
+            if _vec[1] > 0:
+                #in orange box
+                return 4
+            else:
+                return 5
+    return -1
+
+def get_team_color_by_zone(num):
+    blues = [0,1,5,7]
+    oranges = [2,3,4,6]
+
+    if num in blues:
+        return "blue"
+    elif num in oranges:
+        return "orange"
+    else:
+        raise ValueError(f"arg num must be a number 0-7, value recieved: {num}.")
+
+def find_current_zone(ball_object):
+    #0:blue right, 1:blue left, 2:orange left, 3:orange right, 4:orange box, 5:blue box, 6:orange half, 7:blue half,
+    zone = cornerDetection(ball_object.location)
+    if zone != -1:
+        return zone
+
+    zone = boxDetection(ball_object.location)
+    if zone != -1:
+        return zone
+
+    else:
+        if ball_object.location[1] > 0:
+            return 6
+        else:
+            return 7
+
 
 def isBallNearWall(ball_vector):
     if ball_vector[0] > 4096 - 150:
@@ -263,46 +300,36 @@ class ballTouch():
         return True
 
 class Comment():
-    def __init__(self, _comment, voiceID): #need to add priority indicators along with a decay rate
+    def __init__(self, _comment, voiceID,priority,decayRate):
         self.comment = _comment
         self.voiceID = voiceID
+        self.priority = priority # 1-10 (except in rare cases)
+        self.decayRate = decayRate # 1-10 (except in rare cases) lower = faster decay rate
+        self.time_generated = time.time()
+        self.valid = True
 
-def shotDetection(ballObj,timeLimit): #this will be reworked shortly after getting ballprediction going
-    distanceLimit = 1800
-    blueGoal = Vector([0, -5200, 0])
-    orangeGoal = Vector([0, 5200, 0])
+    def update(self):
+        if self.priority <10:
+            if time.time() - self.time_generated > self.decayRate:
+                self.valid = False
 
 
-    currentBlueDistance = distance2D(ballObj.location,blueGoal)
-    currentOrangeDistance = distance2D(ballObj.location,orangeGoal)
 
-    if currentBlueDistance < currentOrangeDistance:
-        target = blueGoal
-    else:
-        target = orangeGoal
 
-    increment = 1/30
+def shotDetection(ballPredictions,timeLimit,gameTime):
+    y_threshold = 5200
 
-    currentDistance = math.inf
-    count = 0
-
-    for i in range(timeLimit*30):
-        futureMod = ballObj.velocity.scale(i*increment)
-        futurePos = ballObj.location+futureMod
-        dist = distance2D(futurePos,target)
-        if dist < distanceLimit:
-            if dist < currentDistance:
-                currentDistance = dist
-                if count >5:
-                    if target == orangeGoal:
-                        return True,1
-                    else:
-                        return True,0
-
-                count+=1
-                continue
-        if count > 0:
+    for i in range(ballPredictions.num_slices):
+        if ballPredictions.slices[i].game_seconds - gameTime < timeLimit:
+            y_val = ballPredictions.slices[i].physics.location.y
+            if abs(y_val) >= y_threshold:
+                if y_val > 0:
+                    return True,1
+                else:
+                    return True,0
+        else:
             return False,0
+
     return False,0
 
 
@@ -310,10 +337,11 @@ def shotDetection(ballObj,timeLimit): #this will be reworked shortly after getti
 
 
 
-def ballHeading(ballObj): #0 heading towards blue, 1 heading towards orange, 2 nuetral hit
+def ballHeading(ballObj,ballPredictionStruct): #0 heading towards blue, 1 heading towards orange, 2 nuetral hit
     blueGoal = Vector([0,-5200,0])
     orangeGoal = Vector([0, 5200, 0])
-    futureLocation = ballObj.location + ballObj.velocity.scale(1 / 20)
+
+    futureLocation = convertStructLocationToVector(ballPredictionStruct)
 
     blueDistance = distance2D(ballObj.location,blueGoal)
     orangeDistance = distance2D(ballObj.location,orangeGoal)
