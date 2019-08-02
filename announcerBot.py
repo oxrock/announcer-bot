@@ -14,18 +14,67 @@ def host(_queue):
     engine = pyttsx3.init()
     rate = engine.getProperty("rate")
     voices = engine.getProperty('voices')  # list of available voices
+    comment_storage = []
+    accepting = True
+
+    def pick_best_comment(comment_list):
+        current_highest = 0
+        best_comments = []
+
+        for index,_comment in enumerate(comment_list):
+            if _comment.priority > current_highest:
+                best_comments.clear()
+                current_highest = _comment.priority
+                best_comments.append(_comment)
+            elif _comment.priority == current_highest:
+                best_comments.append(_comment)
+
+        if len(best_comments) > 0:
+            earliest_time = math.inf
+            earliest_comment = 0
+            for index,_comment in enumerate(best_comments):
+                if _comment.time_generated < earliest_time:
+                    earliest_comment = index
+                    earliest_time = _comment.time_generated
+            return earliest_comment
+        else:
+            return -1
+
+
+
+
     if len(voices) < 1:
         print("no usable voices found on this pc, exiting")
         return
 
     print("Announcer initialized!")
-    while True:
-        if not _queue.empty(): #should empty queue into local storage, update decay and prune comments no longer relavent
-            comment = _queue.get()
-            engine.setProperty("rate",rate+(_queue.qsize()*10))
-            if comment == "exit":
-                print("Recieved exit message!")
-                break
+    last_comment = None
+    while accepting or len(comment_storage) > 0:
+
+        while not _queue.empty() and accepting:
+            c = _queue.get()
+            if c.comment != "exit":
+                comment_storage.append(c)
+            else:
+                accepting = False
+
+        for c in comment_storage:
+            c.update()
+            #remove duplicates, won't work as well when we add better variety
+            if last_comment != None:
+                if c.comment == last_comment.comment:
+                    if c.time_generated - last_comment.time_generated <10:
+                        c.valid = False
+
+
+        comment_storage = [c for c in comment_storage if c.valid ]
+        c_index = pick_best_comment(comment_storage)
+        if c_index != -1:
+            comment = comment_storage.pop(c_index)
+            #might want to increase speaking rate depending on size of current comment storage
+            # if comment == "exit":
+            #     print("Recieved exit message!")
+            #     break
             try:
                 engine.setProperty('voice', voices[comment.voiceID].id)
             except:
@@ -33,6 +82,7 @@ def host(_queue):
 
             engine.say(comment.comment)
             engine.runAndWait()
+            last_comment = comment
 
     print("Exiting announcer thread.")
 
@@ -47,6 +97,7 @@ class Commentator():
         self.firstIter = True
         self.overTime = False
         self.shotDetection = True
+        self.currentZone = None
         self.ballHistory = []
         self.lastTouches = []
         self.teams = []
@@ -54,7 +105,7 @@ class Commentator():
         self.packet = GameTickPacket()
         self.f_packet = FieldInfoPacket()
         self.ball_predictions = BallPrediction()
-        self.q = Queue(maxsize=5)
+        self.q = Queue(maxsize=20)
         self.host = threading.Thread(target=host, args=(self.q,))
         self.host.start()
         self.main()
@@ -73,9 +124,9 @@ class Commentator():
         with self.q.mutex:
             self.q.queue.clear()
 
-    def speak(self, phrase):
+    def speak(self, phrase,priority,decayRate):
         if not self.q.full():
-            self.q.put(Comment(phrase, random.randint(0, 1)))
+            self.q.put(Comment(phrase, random.randint(0, 1),priority,decayRate))
 
     def timeCheck(self, newTime):
         if newTime - self.currentTime < -1:
@@ -87,7 +138,7 @@ class Commentator():
         if not self.overTime:
             if packet.game_info.is_overtime:
                 self.overTime = True
-                self.speak(f"That's the end of regulation time, we're headed into over time with the score tied at {packet.teams[0].score}!")
+                self.speak(f"That's the end of regulation time, we're headed into over time with the score tied at {packet.teams[0].score}!",10,1)
 
     def gameWrapUp(self):
         if self.teams[0].score > self.teams[1].score:
@@ -96,29 +147,30 @@ class Commentator():
             winner = "Orange"
 
         if abs(self.teams[0].score - self.teams[1].score) >=4:
-            self.speak(f"Team {winner} has won today's match with a dominant performance.")
+            self.speak(f"Team {winner} has won today's match with a dominant performance.",10,1)
             #impressive victory
         else:
             #normal win message
-            self.speak(f"Team {winner} clinched the victory this match")
+            self.speak(f"Team {winner} clinched the victory this match",10,1)
 
-        self.speak("Thank you all for watching today's game and never forget that Diablo is coming for you. G G everyone.")
+        self.speak("Thank you all for watching today's game and never forget that Diablo is coming for you. G G everyone.",10,1)
 
     def stopHost(self):
         while self.q.full():
             pass
-        self.q.put("exit")
+        self.speak("exit",0,0)
 
     def handleShotDetection(self):
         if self.shotDetection:
             if len(self.ballHistory) > 0:
-                shot,goal = shotDetection(self.ballHistory[-1],1)
+                shot,goal = shotDetection(self.ball_predictions,2,self.currentTime)
                 if shot:
                     if not self.q.full():
                         if self.lastTouches[-1].team == goal:
-                            self.speak(f"That's a potential own goal from {self.lastTouches[-1].player_name}.")
+                            #self.speak(f"That's a potential own goal from {self.lastTouches[-1].player_name}.",5,3)
+                            pass
                         else:
-                            self.speak(f"{self.lastTouches[-1].player_name} takes a shot at the enemy net!")
+                            self.speak(f"{self.lastTouches[-1].player_name} takes a shot at the enemy net!",5,3)
                     self.shotDetection = False
 
 
@@ -139,54 +191,53 @@ class Commentator():
                 self.shotDetection = True
                 for team in self.teams:
                     team.update(touch)
-                if self.currentTime - self.touchTimer >=4:
-                    if self.q.empty():
-                        if len(self.ballHistory) >0:
-                            _ballHeading = ballHeading(self.ballHistory[-1])
-                            if _ballHeading == 0:
-                                if touch.team == 0:
-                                    if self.ballHistory[-1].location[1] >= 0:
-                                        self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} pushes the ball back towards blue")
-                                    else:
-                                        self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} moves the ball towards its own goal.")
-                                else:
-                                    if touch.team == 1:
-                                        if self.ballHistory[-1].location[1] <= 0:
-                                            self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} puts the ball into a dangerous position for blue.")
-                                        else:
-                                            self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} sends the ball towards blue side.")
+            #no more spam from touches for now
 
-                            elif _ballHeading == 1:
-                                if touch.team == 0:
-                                    if self.ballHistory[-1].location[1] >= 0:
-                                        self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} puts the ball into a dangerous position for orange.")
-                                    else:
-                                        self.speak(
-                                            f"{touch.player_name}'s {contactNames[random.randint(0,2)]} sends the ball towards orange side.")
-                                else:
-                                    if touch.team == 1:
-                                        if self.ballHistory[-1].location[1] >= 0:
-                                            self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} moves the ball towards its own goal.")
-                                        else:
-                                            self.speak(
-                                                f"{touch.player_name}'s {contactNames[random.randint(0,2)]} pushes the ball back  towards orange")
+    def zone_analysis(self,ball_obj):
+        corners = [0,1,2,3]
+        boxes = [4,5]
+        sides = [6,7]
+        new_zone = find_current_zone(ball_obj)
+        if self.currentZone == None:
+            self.currentZone = new_zone
+            return
 
-                            else:
-                                self.speak(f"{touch.player_name}'s {contactNames[random.randint(0,2)]} is neutral.")
+        if new_zone != self.currentZone:
+            if self.currentZone in sides:
+                if new_zone in sides:
+                    self.speak(f"The ball crosses into {get_team_color_by_zone(new_zone)} territory.",0,1)
 
-                            self.touchTimer = self.currentTime
+                elif new_zone in boxes:
+                    if self.shotDetection:
+                        self.speak(f"The ball is dangerously close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
+
+                elif new_zone in corners:
+                    self.speak(
+                        f" {self.lastTouches[-1].player_name} hits the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
+
+
+            elif self.currentZone in boxes:
+                #leaving the box is worth mentioning
+                self.speak(f"The ball is cleared out of the {get_team_color_by_zone(self.currentZone)} box by {self.lastTouches[-1].player_name}.",2,2)
+
+            elif new_zone in corners:
+                self.speak(
+                    f" {self.lastTouches[-1].player_name} hits the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
+
+            elif new_zone in boxes:
+                if self.shotDetection:
+                    self.speak(f"The ball is dangerously close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
+
+            self.currentZone = new_zone
+
 
 
     def updateGameBall(self,packet):
         if packet.game_info.is_round_active:
             currentBall = ballObject(packet.game_ball)
             self.ballHistory.append(currentBall)
+            self.zone_analysis(currentBall)
+
         if len(self.ballHistory) >1000:
             del self.ballHistory[0]
 
@@ -199,10 +250,10 @@ class Commentator():
         self.teams.append(Team(0, members[0]))
         self.teams.append(Team(1, members[1]))
         self.speak(
-            f"We have an exciting match in store for you today. On team blue We have {', '.join([x.name for x in self.teams[0].members])} ")
+            f"Welcome to today's match. On team blue we have {', '.join([x.name for x in self.teams[0].members])} ",10,10)
         self.speak(
-            f" and facing off against them on orange team we have {', '.join([x.name for x in self.teams[1].members])} .")
-        self.speak("Good luck everyone.")
+            f" and representing the orange team we have {', '.join([x.name for x in self.teams[1].members])} .",10,10)
+        self.speak("Good luck everyone.",10,10)
 
     def scoreAnnouncement(self,teamIndex):
         try:
@@ -210,16 +261,16 @@ class Commentator():
             speed = self.ballHistory[-1].getRealSpeed()
             if not self.q.full():
                 if speed <= 20:
-                    self.speak(f"{scorer} scores! It barely limped across the goal line at {speed} kilometers per hour, but a goal is a goal.")
+                    self.speak(f"{scorer} scores! It barely limped across the goal line at {speed} kilometers per hour, but a goal is a goal.",8,10)
 
                 elif speed >= 100:
-                    self.speak(f"{scorer} scores on a blazingly fast shot at  {speed} kilometers per hour! What a shot!")
+                    self.speak(f"{scorer} scores on a blazingly fast shot at  {speed} kilometers per hour! What a shot!",8,10)
 
                 else:
-                    self.speak(f"And {scorer}'s shot goes in at {speed} kilometers per hour!")
+                    self.speak(f"And {scorer}'s shot goes in at {speed} kilometers per hour!",8,10)
 
             if not self.q.full():
-                self.speak(f"That goal brings the score to {self.teams[0].score} blue and {self.teams[1].score} orange.")
+                self.speak(f"That goal brings the score to {self.teams[0].score} blue and {self.teams[1].score} orange.",8,10)
         except:
             pass
 
@@ -227,17 +278,19 @@ class Commentator():
         if self.teams[0].score != packet.teams[0].score:
             self.teams[0].score = packet.teams[0].score
             self.scoreAnnouncement(0)
+            self.currentZone = 0
 
         if self.teams[1].score != packet.teams[1].score:
             self.teams[1].score = packet.teams[1].score
             self.scoreAnnouncement(1)
+            self.currentZone = 0
 
     def main(self):
         while True:
             self.game_interface.update_live_data_packet(self.packet)
             self.game_interface.update_field_info_packet(self.f_packet)
             self.game_interface.update_ball_prediction(self.ball_predictions)
-            gametime = "{:.2f}".format(self.packet.game_info.seconds_elapsed)
+            #gametime = "{:.2f}".format(self.packet.game_info.seconds_elapsed)
 
             if self.packet.game_info.is_match_ended:
                 print("Game is over, exiting.")
@@ -251,10 +304,10 @@ class Commentator():
                         self.joinTimer = time.time()
                     if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
                         self.firstIter = False
-                        self.currentTime = float(gametime)
+                        self.currentTime = float(self.packet.game_info.seconds_elapsed)
                         self.gatherMatchData(self.packet)
 
-            if self.timeCheck(float(gametime)):
+            if self.timeCheck(float(self.packet.game_info.seconds_elapsed)):
                 print("framework reset, resetting announcerbot")
                 self.reset()
             if not self.firstIter:
