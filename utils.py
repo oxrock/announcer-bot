@@ -246,6 +246,14 @@ class Car():
         self.name = name
         self.team = team
         self.index = index
+        self.position = Vector([0,0,0])
+        self.velocity = Vector([0,0,0])
+        self.boost = 0
+
+    def update(self,tick_packet):
+        self.position = convertStructLocationToVector(tick_packet.game_cars[self.index])
+        self.velocity = convertStructLocationToVector(tick_packet.game_cars[self.index])
+        self.boost = tick_packet.game_cars[self.index].boost
 
 
 class ballObject():
@@ -268,6 +276,10 @@ class Team():
     def update(self, ballTouch):
         if ballTouch.team == self.team:
             self.lastTouch = ballTouch
+
+    def updateMembers(self,tickPacket):
+        for m in self.members:
+            m.update(tickPacket)
 
 
 class ballTouch():
