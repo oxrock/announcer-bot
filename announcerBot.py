@@ -98,6 +98,9 @@ class Commentator():
         self.overTime = False
         self.shotDetection = True
         self.currentZone = None
+        self.contactNames = rstring(["hits","touches","moves"])
+        self.dominantNames = rstring(["dominant","commanding","powerful"])
+        self.dangerously = rstring(["alarmingly","perilously","precariously","dangerously"])
         self.ballHistory = []
         self.lastTouches = []
         self.teams = []
@@ -134,11 +137,11 @@ class Commentator():
         self.currentTime = newTime
         return False
 
-    def overtimeCheck(self,packet):
+    def overtimeCheck(self):
         if not self.overTime:
-            if packet.game_info.is_overtime:
+            if self.packet.game_info.is_overtime:
                 self.overTime = True
-                self.speak(f"That's the end of regulation time, we're headed into over time with the score tied at {packet.teams[0].score}!",10,1)
+                self.speak(f"That's the end of regulation time, we're headed into over-time with the score tied at {self.packet.teams[0].score}!",10,1)
 
     def gameWrapUp(self):
         if self.teams[0].score > self.teams[1].score:
@@ -174,13 +177,13 @@ class Commentator():
                     self.shotDetection = False
 
 
+    def updateTeamsInfo(self):
+        for t in self.teams:
+            t.updateMembers(self.packet)
 
-
-    def updateTouches(self, packet):
-        contactNames = ["hit","touch","contact"]
-
+    def updateTouches(self):
         try:
-            touch = ballTouch(packet.game_ball.latest_touch)
+            touch = ballTouch(self.packet.game_ball.latest_touch)
         except Exception as e:
             touch = None
             print(e)
@@ -209,11 +212,11 @@ class Commentator():
 
                 elif new_zone in boxes:
                     if self.shotDetection:
-                        self.speak(f"The ball is dangerously close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
+                        self.speak(f"The ball is {self.dangerously} close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
 
                 elif new_zone in corners:
                     self.speak(
-                        f" {self.lastTouches[-1].player_name} hits the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
+                        f" {self.lastTouches[-1].player_name} {self.contactNames} the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
 
 
             elif self.currentZone in boxes:
@@ -222,29 +225,29 @@ class Commentator():
 
             elif new_zone in corners:
                 self.speak(
-                    f" {self.lastTouches[-1].player_name} hits the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
+                    f" {self.lastTouches[-1].player_name} {self.contactNames} the ball to the {get_team_color_by_zone(new_zone)} corner.",1,2)
 
             elif new_zone in boxes:
                 if self.shotDetection:
-                    self.speak(f"The ball is dangerously close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
+                    self.speak(f"The ball is {self.dangerously} close to the {get_team_color_by_zone(new_zone)} goal!",2,2)
 
             self.currentZone = new_zone
 
 
 
-    def updateGameBall(self,packet):
-        if packet.game_info.is_round_active:
-            currentBall = ballObject(packet.game_ball)
+    def updateGameBall(self):
+        if self.packet.game_info.is_round_active:
+            currentBall = ballObject(self.packet.game_ball)
             self.ballHistory.append(currentBall)
             self.zone_analysis(currentBall)
 
         if len(self.ballHistory) >1000:
             del self.ballHistory[0]
 
-    def gatherMatchData(self, packet):
+    def gatherMatchData(self):
         members = [[], []]
-        for i in range(packet.num_cars):
-            _car = Car(packet.game_cars[i].name, packet.game_cars[i].team, i)
+        for i in range(self.packet.num_cars):
+            _car = Car(self.packet.game_cars[i].name, self.packet.game_cars[i].team, i)
             members[_car.team].append(_car)
 
         self.teams.append(Team(0, members[0]))
@@ -274,14 +277,14 @@ class Commentator():
         except:
             pass
 
-    def scoreCheck(self, packet):
-        if self.teams[0].score != packet.teams[0].score:
-            self.teams[0].score = packet.teams[0].score
+    def scoreCheck(self):
+        if self.teams[0].score != self.packet.teams[0].score:
+            self.teams[0].score = self.packet.teams[0].score
             self.scoreAnnouncement(0)
             self.currentZone = 0
 
-        if self.teams[1].score != packet.teams[1].score:
-            self.teams[1].score = packet.teams[1].score
+        if self.teams[1].score != self.packet.teams[1].score:
+            self.teams[1].score = self.packet.teams[1].score
             self.scoreAnnouncement(1)
             self.currentZone = 0
 
@@ -305,17 +308,18 @@ class Commentator():
                     if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
                         self.firstIter = False
                         self.currentTime = float(self.packet.game_info.seconds_elapsed)
-                        self.gatherMatchData(self.packet)
+                        self.gatherMatchData()
 
             if self.timeCheck(float(self.packet.game_info.seconds_elapsed)):
                 print("framework reset, resetting announcerbot")
                 self.reset()
             if not self.firstIter:
-                self.updateGameBall(self.packet)
-                self.updateTouches(self.packet)
+                self.updateGameBall()
+                self.updateTouches()
+                self.updateTeamsInfo()
                 self.handleShotDetection()
-                self.scoreCheck(self.packet)
-                self.overtimeCheck(self.packet)
+                self.scoreCheck()
+                self.overtimeCheck()
 
 
 if __name__ == "__main__":
