@@ -136,7 +136,7 @@ class Commentator():
         self.f_packet = FieldInfoPacket()
         self.ball_predictions = BallPrediction()
         self.lastCommentTime = time.time()
-        self.q = Queue(maxsize=20)
+        self.q = Queue(maxsize=200)
         self.host = threading.Thread(target=host, args=(self.q,voiceMethod,))
         self.host.start()
         self.main()
@@ -265,7 +265,8 @@ class Commentator():
                     else:
                         loc = Vector([0,5200,0])
 
-                    if distance2D(loc,self.ballHistory[-1].location) < 4000:
+
+                    if not self.KOE.active: #attempt to limit false positives from kickoffs... ugly solution is ugly
                         if self.lastTouches[-1].team == goal:
                             if not self.q.full():
                                 #self.speak(f"That's a potential own goal from {self.lastTouches[-1].player_name}.",5,3)
@@ -303,10 +304,9 @@ class Commentator():
         if touch:
             if len(self.lastTouches) < 1 or self.lastTouches[-1] != touch:
                 self.lastTouches.append(touch)
-                #self.shotDetection = True
+                for team in self.teams:
+                    team.update(touch)
                 if not self.shotDetection:
-                    for team in self.teams:
-                        team.update(touch)
                     shot,goal = shotDetection(self.ball_predictions,2,self.currentTime)
                     if not shot:
                         if touch.player_index != self.shooter:
@@ -396,21 +396,28 @@ class Commentator():
     def scoreAnnouncement(self,teamIndex):
         try:
             scorer = stringCleaner(self.teams[teamIndex].lastTouch.player_name)
-            speed = self.ballHistory[-1].getRealSpeed()
-            if not self.q.full():
-                if speed <= 20:
-                    self.speak(f"{scorer} scores! It barely limped across the goal line at {speed} kilometers per hour, but a goal is a goal.",10,10)
-
-                elif speed >= 100:
-                    self.speak(f"{scorer} scores on a blazingly fast shot at  {speed} kilometers per hour! What a shot!",10,10)
-
-                else:
-                    self.speak(f"And {scorer}'s shot goes in at {speed} kilometers per hour!",10,10)
-
-            if not self.q.full():
-                self.speak(f"That goal brings the score to {self.teams[0].score} blue and {self.teams[1].score} orange.",10,10)
         except:
-            pass
+            if teamIndex == 0:
+                scorer = "Blue Team"
+            else:
+                scorer = "Orange Team"
+        speed = self.ballHistory[-1].getRealSpeed()
+        if not self.q.full():
+            if speed <= 20:
+                self.speak(f"{scorer} scores! It barely limped across the goal line at {speed} kilometers per hour, but a goal is a goal.",10,10)
+
+            elif speed >= 100:
+                self.speak(f"{scorer} scores on a blazingly fast shot at  {speed} kilometers per hour! What a shot!",10,10)
+
+            else:
+                self.speak(f"And {scorer}'s shot goes in at {speed} kilometers per hour!",10,10)
+        else:
+            print("full q")
+
+        if not self.q.full():
+            self.speak(f"That goal brings the score to {self.teams[0].score} blue and {self.teams[1].score} orange.",10,10)
+        else:
+            print("full q")
 
     def scoreCheck(self):
         if self.teams[0].score != self.packet.teams[0].score:
@@ -463,6 +470,7 @@ class Commentator():
                     self.zoneInfo.zoneTimer = self.currentTime
                 if time.time() - self.lastCommentTime >=15:
                     self.randomComment()
+            #time.sleep(0.05)
 
 
 
@@ -470,7 +478,7 @@ if __name__ == "__main__":
     decision = ""
     while decision != 0 and decision != 1:
         try:
-            decision = int(input("Enter 1 to use google text to speach, otherwise enter 0 for default text to speach.\n"))
+            decision = int(input("Enter 0 for pyttsx3 speach(reccomended) or 1 for Google text to speach.\n"))
         except:
             pass
     s = Commentator(decision)

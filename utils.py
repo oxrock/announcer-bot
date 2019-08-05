@@ -307,6 +307,9 @@ class Car():
             if not tick_packet.game_info.is_kickoff_pause:
                 self.position = convertStructLocationToVector(tick_packet.game_cars[self.index])
                 self.velocity = convertStructLocationToVector(tick_packet.game_cars[self.index])
+                speed = self.velocity.magnitude()
+                if speed != 0:
+                    self.speedHistory.append(self.velocity.magnitude())
                 self.boost = tick_packet.game_cars[self.index].boost
                 self.boostHistory.append(self.boost)
                 grounded = tick_packet.game_cars[self.index].has_wheel_contact
@@ -320,7 +323,7 @@ class Car():
             if len(self.boostHistory) > 20000:
                 del self.boostHistory[0]
 
-            self.speedHistory.append(self.velocity.magnitude())
+
             if len(self.speedHistory) > 20000:
                 del self.speedHistory[0]
 
