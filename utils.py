@@ -1,6 +1,8 @@
 import math
 import random
 import time
+import re
+
 
 # Create a list of strings that can be selected from randomly. This allows for greater variety in the strings created.
 class rstring():
@@ -18,6 +20,31 @@ class rstring():
             return ""
         else:
             return self.items[random.randint(0, len(self.items) - 1)]
+
+class ZoneAnalyst():
+    def __init__(self,currentZone,currentTime):
+        self.currentZone = currentZone
+        self.zoneTimer = currentTime
+        self.currentSide = 'blue'
+
+    def update(self,currentZone,currentTime):
+        self.currentZone = currentZone
+
+        if get_team_color_by_zone(currentZone) == 'blue':
+            if self.currentSide != 'blue':
+                self.currentSide = 'blue'
+                self.zoneTimer = currentTime
+        elif get_team_color_by_zone(currentZone) == 'orange':
+            if self.currentSide != 'orange':
+                self.currentSide = 'orange'
+                self.zoneTimer = currentTime
+
+    def timeInZone(self,currentTime):
+        return currentTime - self.zoneTimer
+
+
+def stringCleaner(_string):
+    return re.sub('[^A-Za-z]+', '', _string)
 
 def clamp(_max,_min,value):
     if value > _max:
@@ -236,7 +263,6 @@ def isBallNearWall(ball_vector):
 
 
 def speedConversion(speed_in_UU):
-    # Goosefairy - "1uu == 1cm iirc". BLame Goose if this information is incorrect
     if speed_in_UU != 0:
         return int(round((speed_in_UU/100000)*60*60))
     return 0
@@ -249,11 +275,47 @@ class Car():
         self.position = Vector([0,0,0])
         self.velocity = Vector([0,0,0])
         self.boost = 0
+        self.boostHistory = []
+        self.speedHistory = []
+        self.jumps = 0
+        self.grounded = True
 
     def update(self,tick_packet):
-        self.position = convertStructLocationToVector(tick_packet.game_cars[self.index])
-        self.velocity = convertStructLocationToVector(tick_packet.game_cars[self.index])
-        self.boost = tick_packet.game_cars[self.index].boost
+        if tick_packet.game_info.is_round_active:
+            if not tick_packet.game_info.is_kickoff_pause:
+                self.position = convertStructLocationToVector(tick_packet.game_cars[self.index])
+                self.velocity = convertStructLocationToVector(tick_packet.game_cars[self.index])
+                self.boost = tick_packet.game_cars[self.index].boost
+                self.boostHistory.append(self.boost)
+                grounded = tick_packet.game_cars[self.index].has_wheel_contact
+                if self.grounded:
+                    if not grounded:
+                        self.jumps+=1
+                self.grounded = grounded
+
+
+
+            if len(self.boostHistory) > 20000:
+                del self.boostHistory[0]
+
+            self.speedHistory.append(self.velocity.magnitude())
+            if len(self.speedHistory) > 20000:
+                del self.speedHistory[0]
+
+    def getAverageBoost(self):
+        try:
+            return sum(self.boostHistory)/len(self.boostHistory)
+        except:
+            return 0
+
+    def getAverageSpeed(self):
+        try:
+            return sum(self.boostHistory)/len(self.boostHistory)
+        except:
+            return 0
+
+    def getJumps(self):
+        return self.jumps
 
 
 class ballObject():
@@ -280,6 +342,42 @@ class Team():
     def updateMembers(self,tickPacket):
         for m in self.members:
             m.update(tickPacket)
+
+    def getMatchAverageBoost(self):
+        total = 0
+        for m in self.members:
+            total += m.getAverageBoost()
+        try:
+            return total / len(self.members)
+        except:
+            0
+
+    def getAverageBoost(self):
+        total = 0
+        for m in self.members:
+            total+=m.boost
+        try:
+            return total/len(self.members)
+        except:
+            0
+
+    def getMatchAverageSpeed(self):
+        total = 0
+        for m in self.members:
+            total += m.getAverageSpeed()
+        try:
+            return total / len(self.members)
+        except:
+            0
+
+    def getJumpCount(self):
+        total = 0
+        for m in self.members:
+            total+= m.getJumps()
+        try:
+            return total/len(self.members)
+        except:
+            return 0
 
 
 class ballTouch():
@@ -329,7 +427,7 @@ class Comment():
 
 
 def shotDetection(ballPredictions,timeLimit,gameTime):
-    y_threshold = 5200
+    y_threshold = 5250
 
     for i in range(ballPredictions.num_slices):
         if ballPredictions.slices[i].game_seconds - gameTime < timeLimit:
@@ -343,6 +441,9 @@ def shotDetection(ballPredictions,timeLimit,gameTime):
             return False,0
 
     return False,0
+
+
+
 
 
 
