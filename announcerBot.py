@@ -9,8 +9,18 @@ import threading
 import random
 import time
 import math
+import os
 
-def host(_queue):
+def host(_queue,voiceChoice):
+    if voiceChoice:
+        try:
+            from gtts import gTTS
+            from playsound import playsound
+            googleTalk = True
+        except:
+            googleTalk = False
+    else:
+        googleTalk = False
     engine = pyttsx3.init()
     rate = engine.getProperty("rate")
     voices = engine.getProperty('voices')  # list of available voices
@@ -72,20 +82,35 @@ def host(_queue):
         c_index = pick_best_comment(comment_storage)
         if c_index != -1:
             comment = comment_storage.pop(c_index)
-            try:
-                engine.setProperty('voice', voices[comment.voiceID].id)
-            except:
-                engine.setProperty('voice', voices[0].id)
+            if googleTalk:
+                try:
+                    tts = gTTS(comment.comment, 'en')
+                    first = random.randint(1, 10000000)
+                    second = random.randint(1, 10000000)
+                    tts.save(f"{first}{second}.mp3")
+                    time.sleep(0.1)
+                    playsound(f"{first}{second}.mp3")
+                    os.remove(f"{first}{second}.mp3")
+                except Exception as e:
+                    print(e)
+                    print("switching to offline voice mode")
+                    googleTalk = False
 
-            engine.say(comment.comment)
-            engine.runAndWait()
+            if not googleTalk:
+                try:
+                    engine.setProperty('voice', voices[comment.voiceID].id)
+                except:
+                    engine.setProperty('voice', voices[0].id)
+
+                engine.say(comment.comment)
+                engine.runAndWait()
             last_comment = comment
 
     print("Exiting announcer thread.")
 
 
 class Commentator():
-    def __init__(self):
+    def __init__(self,voiceMethod):
         self.game_interface = GameInterface(get_logger("Commentator"))
         self.game_interface.load_interface()
         self.game_interface.wait_until_loaded()
@@ -111,7 +136,7 @@ class Commentator():
         self.ball_predictions = BallPrediction()
         self.lastCommentTime = time.time()
         self.q = Queue(maxsize=20)
-        self.host = threading.Thread(target=host, args=(self.q,))
+        self.host = threading.Thread(target=host, args=(self.q,voiceMethod,))
         self.host.start()
         self.main()
         self.host.join()
@@ -146,7 +171,7 @@ class Commentator():
             choice = self.RC_list.pop(random.randint(0,len(self.RC_list)-1))
 
         if choice == 0:
-            self.speak(f"{self.RC_Intros} blue team's current avg boost amount is {int(self.teams[0].getAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} blue team's current average boost amount is {int(self.teams[0].getAverageBoost())}.",0,2)
             #blue avg boost
 
         elif choice == 1:
@@ -162,7 +187,7 @@ class Commentator():
             #blue match avg boost
 
         elif choice == 4:
-            self.speak(f"{self.RC_Intros} orange team's current avg boost amount is {int(self.teams[1].getAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} orange team's current average boost amount is {int(self.teams[1].getAverageBoost())}.",0,2)
             #orange avg boost
 
         elif choice == 5:
@@ -417,5 +442,11 @@ class Commentator():
 
 
 if __name__ == "__main__":
-    s = Commentator()
+    decision = ""
+    while decision != 0 and decision != 1:
+        try:
+            decision = int(input("Enter 1 to use google text to speach, otherwise enter 0 for default text to speach.\n"))
+        except:
+            pass
+    s = Commentator(decision)
     print("Exited commentator class")
