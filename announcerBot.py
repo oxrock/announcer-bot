@@ -71,7 +71,7 @@ def host(_queue,voiceChoice):
 
         for c in comment_storage:
             c.update()
-            #remove duplicates, won't work as well when we add better variety
+            #removing duplicates in the means below won't work as well when we add better variety
             if last_comment != None:
                 if c.comment == last_comment.comment:
                     if c.time_generated - last_comment.time_generated <10:
@@ -85,10 +85,10 @@ def host(_queue,voiceChoice):
             if googleTalk:
                 try:
                     tts = gTTS(comment.comment, 'en')
-                    first = random.randint(1, 10000000)
-                    second = random.randint(1, 10000000)
+                    #absolutely hate the implementation below
+                    first = random.randint(1, 99999999)
+                    second = random.randint(1, 99999999)
                     tts.save(f"{first}{second}.mp3")
-                    time.sleep(0.1)
                     playsound(f"{first}{second}.mp3")
                     os.remove(f"{first}{second}.mp3")
                 except Exception as e:
@@ -121,10 +121,11 @@ class Commentator():
         self.shotDetection = True
         self.shooter = None
         self.currentZone = None
+        self.KOE = None
         self.contactNames = rstring(["hits","touches","moves"])
         self.dominantNames = rstring(["dominant","commanding","powerful"])
         self.dangerously = rstring(["alarmingly","perilously","precariously","dangerously"])
-        self.RC_Intros = rstring(["Here's a fun fact. ", "Check this out. ","This is interesting. "])
+        self.RC_Intros = rstring(["Here's a fun fact. ", "Check this out. ","This is interesting. ","You might like this. "])
         self.ballHistory = []
         self.lastTouches = []
         self.RC_list = [0,1,2,3,4,5,6,7]
@@ -162,6 +163,23 @@ class Commentator():
         if not self.q.full():
             self.q.put(Comment(phrase, random.randint(0, 1),priority,decayRate))
         self.lastCommentTime = time.time()
+
+    def kickOffAnalyzer(self):
+        if self.packet.game_info.is_kickoff_pause:
+            if not self.KOE.active:
+                self.KOE = KickoffExaminer(self.currentTime)
+
+        else:
+            if self.KOE.active:
+                if len(self.ballHistory) > 0:
+                    result = self.KOE.update(self.currentTime,self.ballHistory[-1])
+                    if result == 0:
+                        self.speak("The kickoff goes in favor of blue",1,3)
+                    elif result == 1:
+                        self.speak("The kickoff goes in favor of orange",1,3)
+                    elif result == 2:
+                        self.speak("It's a neutral kickoff.",1,3)
+
 
     def randomComment(self):
         if len(self.RC_list) > 0:
@@ -242,26 +260,31 @@ class Commentator():
             if len(self.ballHistory) > 0:
                 shot,goal = shotDetection(self.ball_predictions,2,self.currentTime)
                 if shot:
-
-                    if self.lastTouches[-1].team == goal:
-                        if not self.q.full():
-                            #self.speak(f"That's a potential own goal from {self.lastTouches[-1].player_name}.",5,3)
-                            pass
-                    else:
-                        if not self.q.full():
-                            self.speak(f"{stringCleaner(self.lastTouches[-1].player_name)} takes a shot at the enemy net!",5,3)
-
-                    #self.shooter = self.lastTouches[-1].player_index
                     if goal == 0:
-                        shotTeam = 1
+                        loc = Vector([0,-5200,0])
                     else:
-                        shotTeam = 0
-                    try:
-                        self.shooter = self.teams[shotTeam].lastTouch.player_index
-                    except:
-                        pass
-                        #possibly no touch yet in case of owngoals
-                    self.shotDetection = False
+                        loc = Vector([0,5200,0])
+
+                    if distance2D(loc,self.ballHistory[-1].location) < 4000:
+                        if self.lastTouches[-1].team == goal:
+                            if not self.q.full():
+                                #self.speak(f"That's a potential own goal from {self.lastTouches[-1].player_name}.",5,3)
+                                pass
+                        else:
+                            if not self.q.full():
+                                self.speak(f"{stringCleaner(self.lastTouches[-1].player_name)} takes a shot at the enemy net!",5,3)
+
+                        #self.shooter = self.lastTouches[-1].player_index
+                        if goal == 0:
+                            shotTeam = 1
+                        else:
+                            shotTeam = 0
+                        try:
+                            self.shooter = self.teams[shotTeam].lastTouch.player_index
+                        except:
+                            pass
+                            #possibly no touch yet in case of owngoals
+                        self.shotDetection = False
 
 
 
@@ -423,6 +446,7 @@ class Commentator():
                         self.currentTime = float(self.packet.game_info.seconds_elapsed)
                         self.gatherMatchData()
                         self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
+                        self.KOE = KickoffExaminer(self.currentTime)
 
             if self.timeCheck(float(self.packet.game_info.seconds_elapsed)):
                 print("framework reset, resetting announcerbot")
@@ -434,6 +458,7 @@ class Commentator():
                 self.handleShotDetection()
                 self.scoreCheck()
                 self.overtimeCheck()
+                self.kickOffAnalyzer()
                 if self.packet.game_info.is_kickoff_pause:
                     self.zoneInfo.zoneTimer = self.currentTime
                 if time.time() - self.lastCommentTime >=15:

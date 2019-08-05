@@ -42,6 +42,28 @@ class ZoneAnalyst():
     def timeInZone(self,currentTime):
         return currentTime - self.zoneTimer
 
+class KickoffExaminer():
+    def __init__(self,currentTime):
+        self.startTime = currentTime
+        self.active = True
+
+    def update(self,_currentTime,ballObj):
+        if _currentTime != self.startTime:
+            if _currentTime - self.startTime > 4.5:
+                if ballObj.location[1] >200:
+                    self.active = False
+                    return 0
+
+                elif ballObj.location[1] < -200:
+                    self.active = False
+                    return 1
+
+                else:
+                    self.active = False
+                    return 2
+        else:
+            return -1
+
 
 def stringCleaner(_string):
     return re.sub('[^A-Za-z]+', '', _string)
