@@ -3,7 +3,7 @@ from rlbot.utils.structures.game_data_struct import GameTickPacket,FieldInfoPack
 from rlbot.utils.structures.ball_prediction_struct import BallPrediction
 from rlbot.utils.logging_utils import get_logger
 from utils import *
-from rlbot.agents import botless_agent
+from rlbot.agents.botless_agent import BotlessAgent
 import pyttsx3
 from queue import Queue
 import threading
@@ -111,7 +111,7 @@ def host(_queue,voiceChoice):
     print("Exiting announcer thread.")
 
 
-class Commentator(botless_agent):
+class agent(BotlessAgent):
 
     def __init__(self):
         print("commentator created!")
@@ -475,5 +475,7 @@ if __name__ == "__main__":
     #         decision = int(input("Enter 0 for pyttsx3 speach(reccomended) or 1 for Google text to speach.\n"))
     #     except:
     #         pass
-    s = Commentator()
+    
+    # Can be renamed back to "Commentator" after some updates to rlbot.
+    s = agent()
     print("Exited commentator class")
