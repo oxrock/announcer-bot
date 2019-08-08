@@ -3,6 +3,7 @@ from rlbot.utils.structures.game_data_struct import GameTickPacket,FieldInfoPack
 from rlbot.utils.structures.ball_prediction_struct import BallPrediction
 from rlbot.utils.logging_utils import get_logger
 from utils import *
+from rlbot.agents import botless_agent
 import pyttsx3
 from queue import Queue
 import threading
@@ -66,6 +67,7 @@ def host(_queue,voiceChoice):
             if c.comment != "exit":
                 comment_storage.append(c)
             else:
+                comment_storage.clear()
                 accepting = False
                 #comment_storage.clear()
 
@@ -109,11 +111,15 @@ def host(_queue,voiceChoice):
     print("Exiting announcer thread.")
 
 
-class Commentator():
-    def __init__(self,voiceMethod):
-        self.game_interface = GameInterface(get_logger("Commentator"))
-        self.game_interface.load_interface()
-        self.game_interface.wait_until_loaded()
+class Commentator(botless_agent):
+
+    def __init__(self):
+        print("commentator created!")
+
+    def connect(self, game_interface: GameInterface, config_paths=[]):
+        print("commentator connected!")
+        self.config_paths = config_paths
+        self.game_interface = game_interface
         self.touchTimer = 0
         self.currentTime = 0
         self.firstIter = True
@@ -122,13 +128,14 @@ class Commentator():
         self.shooter = None
         self.currentZone = None
         self.KOE = None
-        self.contactNames = rstring(["hits","touches","moves"])
-        self.dominantNames = rstring(["dominant","commanding","powerful"])
-        self.dangerously = rstring(["alarmingly","perilously","precariously","dangerously"])
-        self.RC_Intros = rstring(["Here's a fun fact. ", "Check this out. ","This is interesting. ","You might like this. "])
+        self.contactNames = rstring(["hits", "touches", "moves"])
+        self.dominantNames = rstring(["dominant", "commanding", "powerful"])
+        self.dangerously = rstring(["alarmingly", "perilously", "precariously", "dangerously"])
+        self.RC_Intros = rstring(
+         ["Here's a fun fact. ", "Check this out. ", "This is interesting. ", "You might like this. "])
         self.ballHistory = []
         self.lastTouches = []
-        self.RC_list = [0,1,2,3,4,5,6,7]
+        self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7]
         self.teams = []
         self.zoneInfo = None
         self.joinTimer = 0
@@ -137,27 +144,17 @@ class Commentator():
         self.ball_predictions = BallPrediction()
         self.lastCommentTime = time.time()
         self.q = Queue(maxsize=200)
-        self.host = threading.Thread(target=host, args=(self.q,voiceMethod,))
+        self.host = threading.Thread(target=host, args=(self.q, 0,))
         self.host.start()
         self.main()
         self.host.join()
 
-
-
-    def reset(self):
-        self.touchTimer = 0
-        self.currentTime = 0
-        self.currentZone = 0
-        self.firstIter = True
-        self.overTime = False
-        self.shotDetection = True
-        self.ballHistory = []
-        self.lastTouches = []
-        self.teams = []
-        self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7]
-        self.joinTimer = 0
+    def retire(self):
         with self.q.mutex:
             self.q.queue.clear()
+        self.stopHost()
+
+
 
     def speak(self, phrase,priority,decayRate):
         if not self.q.full():
@@ -233,7 +230,7 @@ class Commentator():
         if not self.overTime:
             if self.packet.game_info.is_overtime:
                 self.overTime = True
-                self.speak(f"That's the end of regulation time, we're headed into over-time with the score tied at {self.packet.teams[0].score}!",10,1)
+                self.speak(f"That's the end of regulation time, we're headed into over-time with the score tied at {self.packet.teams[0].score}!",10,3)
 
     def gameWrapUp(self):
         if self.teams[0].score > self.teams[1].score:
@@ -436,7 +433,6 @@ class Commentator():
             self.game_interface.update_live_data_packet(self.packet)
             self.game_interface.update_field_info_packet(self.f_packet)
             self.game_interface.update_ball_prediction(self.ball_predictions)
-            #gametime = "{:.2f}".format(self.packet.game_info.seconds_elapsed)
 
             if self.packet.game_info.is_match_ended:
                 print("Game is over, exiting.")
@@ -455,9 +451,7 @@ class Commentator():
                         self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
                         self.KOE = KickoffExaminer(self.currentTime)
 
-            if self.timeCheck(float(self.packet.game_info.seconds_elapsed)):
-                print("framework reset, resetting announcerbot")
-                self.reset()
+            self.timeCheck(float(self.packet.game_info.seconds_elapsed)) #just updates time current
             if not self.firstIter:
                 self.updateGameBall()
                 self.updateTouches()
@@ -475,11 +469,11 @@ class Commentator():
 
 
 if __name__ == "__main__":
-    decision = ""
-    while decision != 0 and decision != 1:
-        try:
-            decision = int(input("Enter 0 for pyttsx3 speach(reccomended) or 1 for Google text to speach.\n"))
-        except:
-            pass
-    s = Commentator(decision)
+    # decision = ""
+    # while decision != 0 and decision != 1:
+    #     try:
+    #         decision = int(input("Enter 0 for pyttsx3 speach(reccomended) or 1 for Google text to speach.\n"))
+    #     except:
+    #         pass
+    s = Commentator()
     print("Exited commentator class")
