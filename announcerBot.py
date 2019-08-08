@@ -146,13 +146,14 @@ class agent(BotlessAgent):
         self.q = Queue(maxsize=200)
         self.host = threading.Thread(target=host, args=(self.q, 0,))
         self.host.start()
-        self.main()
-        self.host.join()
+        self.update()
+
 
     def retire(self):
         with self.q.mutex:
             self.q.queue.clear()
         self.stopHost()
+        self.host.join()
 
 
 
@@ -427,43 +428,78 @@ class agent(BotlessAgent):
             self.scoreAnnouncement(1)
             self.currentZone = 0
 
+    def update(self):
+        self.game_interface.update_live_data_packet(self.packet)
+        self.game_interface.update_field_info_packet(self.f_packet)
+        self.game_interface.update_ball_prediction(self.ball_predictions)
 
-    def main(self):
-        while True:
-            self.game_interface.update_live_data_packet(self.packet)
-            self.game_interface.update_field_info_packet(self.f_packet)
-            self.game_interface.update_ball_prediction(self.ball_predictions)
+        if self.packet.game_info.is_match_ended:
+            print("Game is over, exiting.")
+            self.gameWrapUp()
+            self.stopHost()
 
-            if self.packet.game_info.is_match_ended:
-                print("Game is over, exiting.")
-                self.gameWrapUp()
-                self.stopHost()
-                break
+        if self.firstIter:
+            if self.packet.num_cars >= 1:
+                if self.joinTimer <= 0:
+                    self.joinTimer = time.time()
+                if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
+                    self.firstIter = False
+                    self.currentTime = float(self.packet.game_info.seconds_elapsed)
+                    self.gatherMatchData()
+                    self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
+                    self.KOE = KickoffExaminer(self.currentTime)
 
-            if self.firstIter:
-                if self.packet.num_cars >= 1:
-                    if self.joinTimer <= 0:
-                        self.joinTimer = time.time()
-                    if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
-                        self.firstIter = False
-                        self.currentTime = float(self.packet.game_info.seconds_elapsed)
-                        self.gatherMatchData()
-                        self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
-                        self.KOE = KickoffExaminer(self.currentTime)
+        self.timeCheck(float(self.packet.game_info.seconds_elapsed)) #just updates time current
+        if not self.firstIter:
+            self.updateGameBall()
+            self.updateTouches()
+            self.updateTeamsInfo()
+            self.handleShotDetection()
+            self.scoreCheck()
+            self.overtimeCheck()
+            self.kickOffAnalyzer()
+            if self.packet.game_info.is_kickoff_pause:
+                self.zoneInfo.zoneTimer = self.currentTime
+            if time.time() - self.lastCommentTime >=15:
+                self.randomComment()
 
-            self.timeCheck(float(self.packet.game_info.seconds_elapsed)) #just updates time current
-            if not self.firstIter:
-                self.updateGameBall()
-                self.updateTouches()
-                self.updateTeamsInfo()
-                self.handleShotDetection()
-                self.scoreCheck()
-                self.overtimeCheck()
-                self.kickOffAnalyzer()
-                if self.packet.game_info.is_kickoff_pause:
-                    self.zoneInfo.zoneTimer = self.currentTime
-                if time.time() - self.lastCommentTime >=15:
-                    self.randomComment()
+
+    # def main(self):
+    #     while True:
+    #         self.game_interface.update_live_data_packet(self.packet)
+    #         self.game_interface.update_field_info_packet(self.f_packet)
+    #         self.game_interface.update_ball_prediction(self.ball_predictions)
+    #
+    #         if self.packet.game_info.is_match_ended:
+    #             print("Game is over, exiting.")
+    #             self.gameWrapUp()
+    #             self.stopHost()
+    #             break
+    #
+    #         if self.firstIter:
+    #             if self.packet.num_cars >= 1:
+    #                 if self.joinTimer <= 0:
+    #                     self.joinTimer = time.time()
+    #                 if time.time() - self.joinTimer >=1: #arbitrary timer to ensure all cars connected
+    #                     self.firstIter = False
+    #                     self.currentTime = float(self.packet.game_info.seconds_elapsed)
+    #                     self.gatherMatchData()
+    #                     self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
+    #                     self.KOE = KickoffExaminer(self.currentTime)
+    #
+    #         self.timeCheck(float(self.packet.game_info.seconds_elapsed)) #just updates time current
+    #         if not self.firstIter:
+    #             self.updateGameBall()
+    #             self.updateTouches()
+    #             self.updateTeamsInfo()
+    #             self.handleShotDetection()
+    #             self.scoreCheck()
+    #             self.overtimeCheck()
+    #             self.kickOffAnalyzer()
+    #             if self.packet.game_info.is_kickoff_pause:
+    #                 self.zoneInfo.zoneTimer = self.currentTime
+    #             if time.time() - self.lastCommentTime >=15:
+    #                 self.randomComment()
             #time.sleep(0.05)
 
 
