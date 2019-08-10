@@ -116,10 +116,23 @@ class agent(BotlessAgent):
     def __init__(self):
         print("commentator created!")
 
-    def connect(self, game_interface: GameInterface, config_paths=[]):
+    def createAgentInfo(self,config):
+        try:
+            readout = f"{config.name} was created by {config.details.get('developer')} in the {config.details.get('language')} language. \
+                A fun fact about this bot is  {config.details.get('fun_fact')}."
+        except Exception as e:
+            readout = "failed to create readout"
+            print(e)
+        return readout
+
+    def connect(self, game_interface: GameInterface, configs):
         print("commentator connected!")
-        self.config_paths = config_paths
+        self.config_paths = configs
         self.game_interface = game_interface
+        self.botReadouts = []
+        print(f"we were passed {len(configs)} bundles")
+        for i in range(len(configs)):
+            self.botReadouts.append(self.createAgentInfo(configs[i]))
         self.touchTimer = 0
         self.currentTime = 0
         self.firstIter = True
@@ -146,6 +159,9 @@ class agent(BotlessAgent):
         self.q = Queue(maxsize=200)
         self.host = threading.Thread(target=host, args=(self.q, 0,))
         self.host.start()
+        for each in self.botReadouts:
+            print(each)
+            self.speak(each,10,10)
         self.update()
 
 
@@ -187,7 +203,7 @@ class agent(BotlessAgent):
             choice = self.RC_list.pop(random.randint(0,len(self.RC_list)-1))
 
         if choice == 0:
-            self.speak(f"{self.RC_Intros} blue team's current average boost amount is {int(self.teams[0].getAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} blue team's current average boost amount is {int(self.teams[0].getAverageBoost())} boost.",0,2)
             #blue avg boost
 
         elif choice == 1:
@@ -199,11 +215,11 @@ class agent(BotlessAgent):
             #blue jump count
 
         elif choice == 3:
-            self.speak(f"{self.RC_Intros} blue team's average boost level during this match so far has been {int(self.teams[0].getMatchAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} blue team's average boost level during this match so far has been {int(self.teams[0].getMatchAverageBoost())} boost.",0,2)
             #blue match avg boost
 
         elif choice == 4:
-            self.speak(f"{self.RC_Intros} orange team's current average boost amount is {int(self.teams[1].getAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} orange team's current average boost amount is {int(self.teams[1].getAverageBoost())} boost.",0,2)
             #orange avg boost
 
         elif choice == 5:
@@ -215,7 +231,7 @@ class agent(BotlessAgent):
             #orange jump count
 
         elif choice == 7:
-            self.speak(f"{self.RC_Intros} orange team's average boost level during this match so far has been {int(self.teams[1].getMatchAverageBoost())}.",0,2)
+            self.speak(f"{self.RC_Intros} orange team's average boost level during this match so far has been {int(self.teams[1].getMatchAverageBoost())} boost.",0,2)
             #orange match avg boost
 
         else:

@@ -66,7 +66,7 @@ class KickoffExaminer():
 
 
 def stringCleaner(_string):
-    return re.sub('[^A-Za-z]+', '', _string)
+    return re.sub('[^A-Za-z]+', ' ', _string)
 
 def clamp(_max,_min,value):
     if value > _max:
