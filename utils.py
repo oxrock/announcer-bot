@@ -21,6 +21,16 @@ class rstring():
         else:
             return self.items[random.randint(0, len(self.items) - 1)]
 
+class average():
+    def __init__(self):
+        self.accum = 0
+        self.total = 0
+    def append(self, v):
+        self.accum += v
+        self.total += 1
+    def calc(self):
+        return self.accum / max(1, self.total)
+
 class ZoneAnalyst():
     def __init__(self,currentZone,currentTime):
         self.currentZone = currentZone
