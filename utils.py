@@ -21,7 +21,7 @@ class rstring():
         else:
             return self.items[random.randint(0, len(self.items) - 1)]
 
-class average():
+class Average():
     def __init__(self):
         self.accum = 0
         self.total = 0
@@ -300,25 +300,30 @@ def speedConversion(speed_in_UU):
     return 0
 
 class Car():
-    def __init__(self, name, team, index): #could probably just start updating this class with boost, location and velocity
+    def __init__(self, name, team, index,_configInfo): #could probably just start updating this class with boost, location and velocity
         self.name = name
         self.team = team
         self.index = index
         self.position = Vector([0,0,0])
         self.velocity = Vector([0,0,0])
         self.boost = 0
-        self.boostHistory = []
-        self.speedHistory = []
+        self.boostHistory = Average()
+        self.speedHistory = Average()
         self.jumps = 0
         self.grounded = True
+        self.configInfo = _configInfo
+        self.goals = 0
+
+
+
 
     def update(self,tick_packet):
         if tick_packet.game_info.is_round_active:
             if not tick_packet.game_info.is_kickoff_pause:
                 self.position = convertStructLocationToVector(tick_packet.game_cars[self.index])
-                self.velocity = convertStructLocationToVector(tick_packet.game_cars[self.index])
-                speed = self.velocity.magnitude()
-                if speed != 0:
+                self.velocity = convertStructVelocityToVector(tick_packet.game_cars[self.index])
+                speed = clamp(2300,0,self.velocity.magnitude())
+                if speed >=1:
                     self.speedHistory.append(self.velocity.magnitude())
                 self.boost = tick_packet.game_cars[self.index].boost
                 self.boostHistory.append(self.boost)
@@ -330,24 +335,11 @@ class Car():
 
 
 
-            if len(self.boostHistory) > 20000:
-                del self.boostHistory[0]
-
-
-            if len(self.speedHistory) > 20000:
-                del self.speedHistory[0]
-
     def getAverageBoost(self):
-        try:
-            return sum(self.boostHistory)/len(self.boostHistory)
-        except:
-            return 0
+        return self.boostHistory.calc()
 
     def getAverageSpeed(self):
-        try:
-            return sum(self.boostHistory)/len(self.boostHistory)
-        except:
-            return 0
+        return self.speedHistory.calc()
 
     def getJumps(self):
         return self.jumps
@@ -369,6 +361,15 @@ class Team():
         self.members = members
         self.lastTouch = None
         self.score = 0
+        self.language = 0
+        self.developer = 1
+        self.fact = 2
+
+    def scored(self):
+        for m in self.members:
+            if m.index == self.lastTouch.player_index:
+                m.goals +=1
+                return m.goals
 
     def update(self, ballTouch):
         if ballTouch.team == self.team:
@@ -413,6 +414,31 @@ class Team():
             return total/len(self.members)
         except:
             return 0
+
+    def getRandomConfigInfo(self):
+        _car = random.choice(self.members)
+        choice = random.randint(0,2)
+        comment = "Something went wrong in 'Team.getRandomConfigInfo()'"
+        if choice == self.developer:
+            try:
+                comment = f"{stringCleaner(_car.name)} was created by {_car.configInfo['dev']}."
+            except:
+                comment = f"Sadly {stringCleaner(_car.name)}'s developer prefers to remain namesless"
+        elif choice == self.fact:
+            try:
+                comment = f"{stringCleaner(_car.name)}'s developer thought this was interesting: {_car.configInfo['fact']}."
+            except:
+                comment = f"I guess {stringCleaner(_car.name)} doesn't have any fun facts for us."
+
+        elif choice == self.language:
+            try:
+                comment = f"Did you know that {stringCleaner(_car.name)} was developed using {_car.configInfo['language']}?"
+            except:
+                comment = f"I wonder what language {stringCleaner(_car.name)} was developed in. The developer wouldn't tell us."
+
+        return comment
+
+
 
 
 class ballTouch():

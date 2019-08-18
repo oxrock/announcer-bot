@@ -116,14 +116,22 @@ class agent(BotlessAgent):
     def __init__(self):
         print("commentator created!")
 
+    def pair_report(self):
+        for i in range(len(self.botReadouts)):
+            print(self.botReadouts[i]['name'])
+            print(self.packet.game_cars[i].name)
+            print("=================")
+
+
     def createAgentInfo(self,config):
-        try:
-            readout = f"{config.name} was created by {config.details.get('developer')} in the {config.details.get('language')} language. \
-                A fun fact about this bot is  {config.details.get('fun_fact')}."
-        except Exception as e:
-            readout = "failed to create readout"
-            print(e)
-        return readout
+        configInfo = {}
+        configInfo['name'] = config.name
+        configInfo['dev'] = config.details.get('developer')
+        configInfo['language'] = config.details.get('language')
+        configInfo['fact'] = config.details.get('fun_fact')
+        for key in configInfo:
+            print(configInfo[key])
+        return configInfo
 
     def connect(self, game_interface: GameInterface, configs):
         print("commentator connected!")
@@ -148,7 +156,7 @@ class agent(BotlessAgent):
          ["Here's a fun fact. ", "Check this out. ", "This is interesting. ", "You might like this. "])
         self.ballHistory = []
         self.lastTouches = []
-        self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7]
+        self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7,8 ,9]
         self.teams = []
         self.zoneInfo = None
         self.joinTimer = 0
@@ -156,12 +164,13 @@ class agent(BotlessAgent):
         self.f_packet = FieldInfoPacket()
         self.ball_predictions = BallPrediction()
         self.lastCommentTime = time.time()
+        self.finished = False
         self.q = Queue(maxsize=200)
         self.host = threading.Thread(target=host, args=(self.q, 0,))
         self.host.start()
-        for each in self.botReadouts:
-            print(each)
-            self.speak(each,10,10)
+        # for each in self.botReadouts:
+        #     print(each)
+        #     self.speak(each,10,10)
         self.update()
 
 
@@ -174,7 +183,7 @@ class agent(BotlessAgent):
 
 
     def speak(self, phrase,priority,decayRate):
-        if not self.q.full():
+        if not self.q.full() and not self.finished:
             self.q.put(Comment(phrase, random.randint(0, 1),priority,decayRate))
         self.lastCommentTime = time.time()
 
@@ -199,7 +208,7 @@ class agent(BotlessAgent):
         if len(self.RC_list) > 0:
             choice = self.RC_list.pop(random.randint(0,len(self.RC_list)-1))
         else:
-            self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7]
+            self.RC_list = [0, 1, 2, 3, 4, 5, 6, 7,8 ,9]
             choice = self.RC_list.pop(random.randint(0,len(self.RC_list)-1))
 
         if choice == 0:
@@ -233,6 +242,13 @@ class agent(BotlessAgent):
         elif choice == 7:
             self.speak(f"{self.RC_Intros} orange team's average boost level during this match so far has been {int(self.teams[1].getMatchAverageBoost())} boost.",0,2)
             #orange match avg boost
+        elif choice == 8:
+            #blue team comment
+            self.speak(self.teams[0].getRandomConfigInfo(),0,2)
+
+        elif choice == 9:
+            #orange team comment
+            self.speak(self.teams[1].getRandomConfigInfo(),0,2)
 
         else:
             self.speak("Hey, did you know that I'm terrible at making up random comments?", 0, 2)
@@ -396,7 +412,7 @@ class agent(BotlessAgent):
     def gatherMatchData(self):
         members = [[], []]
         for i in range(self.packet.num_cars):
-            _car = Car(self.packet.game_cars[i].name, self.packet.game_cars[i].team, i)
+            _car = Car(self.packet.game_cars[i].name, self.packet.game_cars[i].team, i,self.botReadouts[i])
             members[_car.team].append(_car)
 
         self.teams.append(Team(0, members[0]))
@@ -410,6 +426,8 @@ class agent(BotlessAgent):
     def scoreAnnouncement(self,teamIndex):
         try:
             scorer = stringCleaner(self.teams[teamIndex].lastTouch.player_name)
+
+
         except:
             if teamIndex == 0:
                 scorer = "Blue Team"
@@ -427,6 +445,17 @@ class agent(BotlessAgent):
                 self.speak(f"And {scorer}'s shot goes in at {speed} kilometers per hour!",10,10)
         else:
             print("full q")
+        try:
+            scorer_info = self.teams[teamIndex].scored()
+            if scorer_info <=1:
+                scoreComment = f"That's the first goal for {scorer} this match."
+            else:
+                scoreComment = f"That brings {scorer} up to {scorer_info} goals this match."
+
+            if not self.q.full():
+                self.speak(scoreComment,10,10)
+        except:
+            pass
 
         if not self.q.full():
             self.speak(f"That goal brings the score to {self.teams[0].score} blue and {self.teams[1].score} orange.",10,10)
@@ -450,9 +479,9 @@ class agent(BotlessAgent):
         self.game_interface.update_ball_prediction(self.ball_predictions)
 
         if self.packet.game_info.is_match_ended:
-            print("Game is over, exiting.")
-            self.gameWrapUp()
-            self.stopHost()
+            if not self.finished:
+                self.gameWrapUp()
+                self.finished = True
 
         if self.firstIter:
             if self.packet.num_cars >= 1:
@@ -464,6 +493,7 @@ class agent(BotlessAgent):
                     self.gatherMatchData()
                     self.zoneInfo = ZoneAnalyst(self.currentZone, self.currentTime)
                     self.KOE = KickoffExaminer(self.currentTime)
+                    #self.pair_report()
 
         self.timeCheck(float(self.packet.game_info.seconds_elapsed)) #just updates time current
         if not self.firstIter:
